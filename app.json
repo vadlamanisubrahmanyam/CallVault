@@ -5,6 +5,10 @@
     "version": "0.1.0",
     "orientation": "portrait",
     "platforms": ["android"],
+    "splash": {
+      "backgroundColor": "#FFFFFF",
+      "resizeMode": "contain"
+    },
     "android": {
       "package": "com.subrahmanyam.callvault",
       "permissions": [
