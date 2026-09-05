@@ -1,0 +1,7 @@
+{
+  "name": "call-recorder",
+  "version": "0.1.0",
+  "description": "Local Expo module: native Android call-state detection + mic-based call recording",
+  "main": "index.js",
+  "platforms": ["android"]
+}
