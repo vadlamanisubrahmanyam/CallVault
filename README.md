@@ -65,11 +65,11 @@ git commit -m "CallVault v0.1"
 git push origin main
 ```
 
-Then download the `CallVault-debug-apk` artifact from the Actions run and
+Then download the `CallVault-release-apk` artifact from the Actions run and
 install via:
 
 ```bash
-adb install app-debug.apk
+adb install -r app-release.apk
 ```
 
 ## First-run permissions checklist
@@ -86,6 +86,33 @@ runtime):
 The foreground-service notification while recording is required by
 Android, not optional — it cannot be hidden, since Android requires the
 user to always be able to see that a microphone-using service is active.
+
+## App icon
+
+`assets/icon.png`, `assets/adaptive-icon.png`, and `assets/splash-icon.png`
+are the app icon (a shield + phone-handset mark, with a small red dot for
+"recording"). They're already wired into `app.json` (`icon`,
+`android.adaptiveIcon`, `splash.image`) — `expo prebuild` picks them up
+automatically, no extra Actions step needed. `assets/generate_icon.py`
+regenerates them from scratch (via `cairosvg`) if you ever want to tweak
+the colors or shape.
+
+## Signing (release builds)
+
+CI builds a **release** APK, not debug — a debug APK expects a live Metro
+server for its JavaScript bundle and crashes immediately on launch when
+installed standalone on a device. Release bundles the JS into the APK.
+
+Release builds must be signed, so this project ships with a self-signed
+keystore at `android-signing/release.keystore` (password `callvault123`,
+alias `callvault`) and a config plugin (`plugins/withReleaseSigning.js`)
+that wires it into `android/app/build.gradle` automatically on every
+`expo prebuild`. This keystore is for personal sideloading only — never
+use a keystore like this for a Play Store submission.
+
+Because the signing key stays the same across builds, updating the app on
+your phone (`adb install -r app-release.apk`) works without needing to
+uninstall the previous version first.
 
 ## Storage location
 

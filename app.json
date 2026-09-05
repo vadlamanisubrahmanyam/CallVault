@@ -5,12 +5,19 @@
     "version": "0.1.0",
     "orientation": "portrait",
     "platforms": ["android"],
+    "icon": "./assets/icon.png",
     "splash": {
+      "image": "./assets/splash-icon.png",
       "backgroundColor": "#FFFFFF",
       "resizeMode": "contain"
     },
+    "plugins": ["./plugins/withReleaseSigning.js"],
     "android": {
       "package": "com.subrahmanyam.callvault",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#1C2530"
+      },
       "permissions": [
         "RECORD_AUDIO",
         "READ_PHONE_STATE",
