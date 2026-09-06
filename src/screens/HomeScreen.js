@@ -55,11 +55,18 @@ export default function HomeScreen() {
   };
 
   const toggleChannel = async (channel, value) => {
-    if (channel === 'whatsapp') {
-      Alert.alert(
-        'WhatsApp recording (Phase 2)',
-        'WhatsApp call detection uses a Notification Listener service and is not implemented in this v0.1 build yet. Enabling this toggle will have no effect until Phase 2 ships.'
-      );
+    if (channel === 'whatsapp' && value) {
+      const granted = await CallRecorder.isWhatsAppListenerEnabled();
+      if (!granted) {
+        Alert.alert(
+          'Notification access needed',
+          'WhatsApp call detection watches WhatsApp\'s own call notification, which requires Notification Access — a special permission Android makes you grant manually in Settings (there\'s no in-app prompt for this one).',
+          [
+            { text: 'Not now', style: 'cancel' },
+            { text: 'Open Settings', onPress: () => CallRecorder.openNotificationAccessSettings() },
+          ]
+        );
+      }
     }
     if (channel === 'phone') setPhoneEnabled(value);
     if (channel === 'whatsapp') setWhatsappEnabled(value);
@@ -145,7 +152,7 @@ export default function HomeScreen() {
       />
       <Row
         title="WhatsApp calls"
-        subtitle="Phase 2 — not yet implemented"
+        subtitle="Notification-based detection — needs Notification Access"
         value={whatsappEnabled}
         onValueChange={(v) => toggleChannel('whatsapp', v)}
       />

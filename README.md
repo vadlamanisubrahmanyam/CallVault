@@ -1,31 +1,46 @@
-# CallVault v0.1
+# CallVault v0.2
 
-A single-screen Android app to record phone calls (and, in Phase 2,
-WhatsApp calls) with contact-based filenames, stored in local app storage.
+A single-screen Android app to record phone calls and WhatsApp calls, with
+contact-based filenames, stored in local app storage.
 
-## What works in v0.1
+## What works in v0.2
 
 - Master on/off + per-channel (Phone / WhatsApp) toggles
 - Real native phone-call detection via `TelephonyManager` broadcasts
+- Real WhatsApp call detection via a `NotificationListenerService`
+  watching WhatsApp's ongoing-call notification (see `PHASE2_WHATSAPP.md`
+  for how it works and its limitations — it's real, but heuristic-based)
 - Mic-based recording for the duration of a call, saved as `.m4a`
-- Contact name resolution via the device's contact list (falls back to
-  the raw number if not found)
+- Contact name resolution: from the device's contact list for phone calls,
+  directly from the notification title for WhatsApp calls
 - Filename convention: `YYYY-MM-DD_HHMM_ContactName_Channel.m4a`
 - Single-screen UI: controls + live-recording banner + searchable/filterable
   recordings list, with play / share / delete
-- GitHub Actions workflow that produces a downloadable debug APK on every
-  push to `main` — no EAS account, no Apple Developer account, no local
-  Android Studio needed
+- Signed release APK via GitHub Actions on every push to `main` — no EAS
+  account, no Apple Developer account, no local Android Studio needed
 
-## What's stubbed / not real yet
+## What's still a known gap
 
-- **WhatsApp call recording** — toggle exists, does nothing yet. See
-  `PHASE2_WHATSAPP.md` for the planned approach (NotificationListenerService).
 - **Outgoing call number capture** — the receiver currently reads the
-  incoming-call number from the broadcast extra; outgoing calls need the
-  `NEW_OUTGOING_CALL` flow (deprecated on newer Android, so this needs a
-  content-observer-on-call-log fallback) — flagged as a known gap, not
-  wired up in this build.
+  incoming-call number from the broadcast extra; outgoing native calls
+  need the `NEW_OUTGOING_CALL` flow (deprecated on newer Android, so this
+  needs a content-observer-on-call-log fallback) — not wired up yet.
+- **No retention/auto-delete policy** — recordings accumulate until
+  manually deleted.
+
+## v0.1 → v0.2 changelog
+
+- **Fixed:** `call-recorder` native module was never actually linked into
+  the build (missing `file:./modules/call-recorder` dependency in
+  `package.json`) — this is why the installed app was silently running in
+  mock/"demo mode" instead of really recording anything.
+- **Fixed:** module's `android/build.gradle` referenced a placeholder
+  Gradle plugin that doesn't exist; replaced with the real Expo local-module
+  template.
+- **Added:** real WhatsApp call detection (previously a UI stub).
+- **Added:** release-mode build + self-signed keystore, since debug APKs
+  crash on launch without a live Metro server.
+- **Added:** app icon (shield + handset mark).
 
 ## Read this before you rely on it
 
@@ -86,6 +101,12 @@ runtime):
 The foreground-service notification while recording is required by
 Android, not optional — it cannot be hidden, since Android requires the
 user to always be able to see that a microphone-using service is active.
+
+For WhatsApp recording, there's a fifth, manual step: turning the
+WhatsApp toggle on in-app will prompt you to grant **Notification
+Access** via a Settings deep-link, since Android has no runtime dialog
+for this one (Settings → Apps → Special app access → Notification
+access → CallVault → Allow).
 
 ## App icon
 

@@ -1,54 +1,43 @@
-# Phase 2 — WhatsApp call detection
+# WhatsApp call detection — implemented (v0.2)
 
-Not implemented in v0.1. The toggle exists in the UI and shows a warning
-when enabled, but has no effect yet. This file scopes the approach for
-when we pick it up.
+WhatsApp calls are VoIP and never touch `TelephonyManager`, so there's no
+broadcast equivalent to `ACTION_PHONE_STATE_CHANGED` for them, and no
+public WhatsApp API for call events.
 
-## Why it's harder than native calls
+## Approach used: NotificationListenerService
 
-WhatsApp calls are VoIP and never touch `TelephonyManager`, so there is no
-broadcast equivalent to `ACTION_PHONE_STATE_CHANGED` for them. There is
-also no public WhatsApp API for call events.
+`WhatsAppCallListenerService` watches notifications from `com.whatsapp`
+and `com.whatsapp.w4b` (Business), and treats a notification tagged
+`Notification.CATEGORY_CALL` as an active call. On post, it starts
+`RecordingForegroundService` with the contact name pulled directly from
+the notification title (WhatsApp shows the display name, not a phone
+number, so there's nothing to resolve via contacts here). On removal, it
+stops the recording.
 
-## The only realistic approach: NotificationListenerService
+## Setup required (one-time, manual)
 
-WhatsApp posts an ongoing, non-dismissible notification while a call is
-active ("Ongoing call" / "WhatsApp Voice Call"). A `NotificationListenerService`
-can observe notifications from `com.whatsapp` (or `com.whatsapp.w4b` for
-Business) appearing and disappearing, and use that as a proxy for
-call start/end.
+Unlike the other permissions this app requests, Notification Access has
+no runtime permission dialog — Android requires the user to grant it
+manually via Settings → Apps → Special app access → Notification access.
+The app surfaces this: turning the WhatsApp toggle on checks whether
+access is already granted, and if not, offers a button that deep-links
+straight to that settings screen (`Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS`).
 
-Trade-offs to accept going in:
-- Requires the user to grant **Notification Access** in system settings —
-  a separate, more sensitive permission than the ones this build already
-  asks for, and one Android surfaces with its own warning dialog.
-- Detection is via notification *text/package matching*, which is brittle
-  — WhatsApp can change notification wording or channel IDs between app
-  versions without warning, silently breaking detection until this code
-  is updated.
-- It cannot distinguish a voice call from a video call without deeper
-  notification inspection, which may not always be reliable either.
-- Audio capture is still mic-based (see main README) — this only solves
+## Known limitations (real, not hypothetical)
+
+- **Category-tagging isn't a documented public contract.** Most current
+  WhatsApp versions tag ongoing-call notifications with `CATEGORY_CALL`,
+  but WhatsApp could change this in a future update without notice,
+  silently breaking detection until this code is updated to match.
+- **No voice/video distinction.** Both are recorded the same way.
+- **Audio is still mic-based**, same as phone calls — this only solves
   *when* to start/stop recording, not *how* the audio is captured.
-
-## Suggested implementation sketch
-
-1. Add a `WhatsAppCallListenerService : NotificationListenerService`.
-2. In `onNotificationPosted`, check `sbn.packageName == "com.whatsapp"` and
-   match against known ongoing-call notification categories/flags.
-3. On detected call start, call the same `RecordingForegroundService.start()`
-   used for native calls, passing `channel = "whatsapp"` and the contact
-   name parsed from the notification's title (WhatsApp puts the contact
-   name there, not a phone number, so `ContactResolver` won't apply the
-   same way — store it directly).
-4. In `onNotificationRemoved`, call `RecordingForegroundService.stop()`.
-5. Add a settings deep-link so the app can send the user directly to
-   Settings → Notification Access when the WhatsApp toggle is turned on
-   without that permission granted yet.
+- **One call at a time.** The service tracks a single active notification
+  key; it isn't designed to handle overlapping WhatsApp call notifications.
 
 ## Not planned
 
 Root-only approaches (Magisk modules, Xposed hooks into WhatsApp's audio
-pipeline) would give more reliable audio but are out of scope — they'd tie
-the app to root access, which conflicts with the sideloading-on-a-normal-
-phone approach used across this portfolio.
+pipeline) would give more reliable detection and audio, but are out of
+scope — they'd tie the app to root access, which conflicts with the
+sideloading-on-a-normal-phone approach used across this portfolio.

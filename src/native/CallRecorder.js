@@ -63,6 +63,12 @@ const mock = {
   async getStorageInfo() {
     return { usedBytes: 1_200_000_000, recordingCount: mockRecordings.length, dir: '/CallVault/Recordings' };
   },
+  async isWhatsAppListenerEnabled() {
+    return false;
+  },
+  async openNotificationAccessSettings() {
+    console.log('[mock] would open Notification Access settings');
+  },
   addListener() {
     return { remove() {} };
   },
