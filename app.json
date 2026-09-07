@@ -2,7 +2,7 @@
   "expo": {
     "name": "CallVault",
     "slug": "callvault",
-    "version": "0.4.0",
+    "version": "0.4.1",
     "orientation": "portrait",
     "platforms": ["android"],
     "icon": "./assets/icon.png",
@@ -18,9 +18,9 @@
         {
           "android": {
             "minSdkVersion": 28,
-            "compileSdkVersion": 35,
+            "compileSdkVersion": 34,
             "targetSdkVersion": 34,
-            "buildToolsVersion": "35.0.0"
+            "kotlinVersion": "1.9.24"
           }
         }
       ]

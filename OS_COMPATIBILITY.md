@@ -9,13 +9,23 @@ see the caveat at the bottom.
 | Setting | Value | Why |
 |---|---|---|
 | `minSdkVersion` | 28 (Android 9) | Matches the oldest target device (Nokia 8) exactly — no lower support needed or claimed |
-| `targetSdkVersion` | 34 (Android 14) | Matches what Expo SDK 51 / React Native 0.74 was actually built and tested against. Android's compatibility model means an app targeting 34 runs fine on newer OS versions (15, 16, ...) under that target's behavior contract — it does **not** need to target the device's own OS version to run on it. Forcing target 35/36 would opt into newer, untested-by-Expo-51 behavior changes for no functional benefit here. |
-| `compileSdkVersion` | 35 (Android 15) | Builds against a newer platform/toolchain than the runtime target, for forward compatibility, without changing the app's declared behavior contract |
+| `targetSdkVersion` | 34 (Android 14) | Matches what Expo SDK 51 / React Native 0.74 was actually built and tested against. Android's compatibility model means an app targeting 34 runs fine on newer OS versions (15, 16, ...) under that target's behavior contract — it does **not** need to target the device's own OS version to run on it. |
+| `compileSdkVersion` | 34 (Android 14) | An earlier version of this doc set this to 35 to "stretch" forward compatibility. That broke the build: it pulled in a newer Kotlin toolchain than `expo-modules-core` 1.12.0's own bundled source was written against, and a stricter null-safety check in that newer compiler failed on Expo's own code (not ours) — see the v0.4.1 changelog below. Reverted to 34, which is the version this exact dependency set is actually verified to compile with. |
+| `kotlinVersion` | 1.9.24 (pinned explicitly) | Pinned defensively so nothing in the dependency graph can silently pull a newer Kotlin compiler again the way the compileSdk-35 change apparently did |
 
-CI explicitly installs `platforms;android-35` and matching build-tools
+CI explicitly installs `platforms;android-34` and matching build-tools
 rather than relying on whatever happens to be preinstalled on the GitHub
 Actions runner, so the build doesn't quietly start failing if the default
 image changes.
+
+**Important nuance:** compiling against 34 instead of 35 has no bearing
+on whether the app *runs* on Android 15/16 devices — it already does,
+via Android's standard backward-compatibility model. The 35 attempt was
+a marginal forward-compatibility stretch that turned out to cost more
+(a broken build) than it was worth for zero functional gain. Not every
+"newer number" is actually a safer choice; in this case, matching what
+the dependency set was actually tested against was the more reliable
+path to "works on every device in range."
 
 ## What's already handled at each OS version boundary
 

@@ -1,4 +1,4 @@
-# CallVault v0.4
+# CallVault v0.4.1
 
 A single-screen Android app to record phone calls and WhatsApp calls, with
 contact-based filenames, stored in local app storage.
@@ -28,6 +28,18 @@ contact-based filenames, stored in local app storage.
   needs a content-observer-on-call-log fallback) — not wired up yet.
 - **No retention/auto-delete policy** — recordings accumulate until
   manually deleted.
+
+## v0.4 → v0.4.1 changelog (build fix)
+
+- **Fixed:** the v0.4 change to `compileSdkVersion: 35` broke the build.
+  It's a real regression, not a device-specific issue — the compile
+  error was inside Expo's own `expo-modules-core` (1.12.0) bundled
+  source, which a newer Kotlin toolchain compiles more strictly than the
+  version that library was actually written against. Reverted to
+  `compileSdkVersion: 34` (matching `targetSdkVersion`), and pinned
+  `kotlinVersion: "1.9.24"` explicitly so this can't silently regress
+  again. This has no effect on whether the app runs on Android 15/16 —
+  see OS_COMPATIBILITY.md for why.
 
 ## OS compatibility
 
