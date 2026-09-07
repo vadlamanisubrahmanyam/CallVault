@@ -1,78 +1,36 @@
-// Thin JS wrapper around the native "CallRecorder" Expo module (see /modules/call-recorder).
-// This native module only exists after `expo prebuild` + a native build — it will NOT
-// work inside Expo Go. The mock fallback below lets the UI be developed/previewed safely
-// without a native build, and clearly logs when it's being used.
+// Thin JS wrapper around the native "CallRecorder" Expo module (see
+// /modules/call-recorder). This native module only exists after
+// `expo prebuild` + a native build — it will NOT work inside Expo Go.
+//
+// There is intentionally no mock/demo data here. If the native module
+// isn't linked for some reason, functions fail loudly (console.warn) and
+// return empty/false rather than showing fake recordings — a real bug
+// should be visible as "nothing works", not disguised as working software.
 
-import { NativeModulesProxy, requireNativeModule } from 'expo-modules-core';
+import { requireNativeModule } from 'expo-modules-core';
 
 let CallRecorderNative = null;
 try {
   CallRecorderNative = requireNativeModule('CallRecorder');
 } catch (e) {
   console.warn(
-    '[CallRecorder] Native module not available — using mock. ' +
-    'Run `expo prebuild` and a native Android build to enable real recording.'
+    '[CallRecorder] Native module not available. ' +
+    'Run `expo prebuild` and a native Android build — this will not work in Expo Go.'
   );
 }
 
-const mockRecordings = [
-  {
-    id: '1',
-    contactName: 'Amma',
-    phoneNumber: '+919800000001',
-    channel: 'phone',
-    startedAt: new Date().toISOString(),
-    durationSeconds: 252,
-    filename: '2026-09-05_0938_Amma_Phone.m4a',
-    filePath: null,
-  },
-  {
-    id: '2',
-    contactName: 'Ravi Kumar',
-    phoneNumber: '+919800000002',
-    channel: 'whatsapp',
-    startedAt: new Date(Date.now() - 3600_000).toISOString(),
-    durationSeconds: 767,
-    filename: '2026-09-05_0815_RaviKumar_WhatsApp.m4a',
-    filePath: null,
-  },
-];
-
-const mock = {
-  async setChannelEnabled(channel, enabled) {
-    console.log(`[mock] setChannelEnabled(${channel}, ${enabled})`);
-    return true;
-  },
-  async getChannelEnabled(channel) {
-    return channel === 'phone';
-  },
-  async setMasterEnabled(enabled) {
-    console.log(`[mock] setMasterEnabled(${enabled})`);
-    return true;
-  },
-  async getMasterEnabled() {
-    return true;
-  },
-  async listRecordings() {
-    return mockRecordings;
-  },
-  async deleteRecording(id) {
-    console.log(`[mock] deleteRecording(${id})`);
-    return true;
-  },
-  async getStorageInfo() {
-    return { usedBytes: 1_200_000_000, recordingCount: mockRecordings.length, dir: '/CallVault/Recordings' };
-  },
-  async isWhatsAppListenerEnabled() {
-    return false;
-  },
-  async openNotificationAccessSettings() {
-    console.log('[mock] would open Notification Access settings');
-  },
-  addListener() {
-    return { remove() {} };
-  },
+const unavailable = {
+  async setMasterEnabled() { return false; },
+  async getMasterEnabled() { return false; },
+  async listRecordings() { return []; },
+  async deleteRecording() { return false; },
+  async getStorageInfo() { return { usedBytes: 0, recordingCount: 0, dir: '' }; },
+  isWhatsAppListenerEnabled() { return false; },
+  openNotificationAccessSettings() { return false; },
+  isOverlayPermissionGranted() { return false; },
+  openOverlayPermissionSettings() { return false; },
+  addListener() { return { remove() {} }; },
 };
 
-export default CallRecorderNative || mock;
+export default CallRecorderNative || unavailable;
 export const isNativeAvailable = !!CallRecorderNative;

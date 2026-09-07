@@ -1,40 +1,73 @@
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import {
   View, Text, Switch, FlatList, TextInput, TouchableOpacity,
-  StyleSheet, Alert, Platform,
+  StyleSheet, Alert, Platform, PermissionsAndroid,
 } from 'react-native';
 import { Audio } from 'expo-av';
 import * as Sharing from 'expo-sharing';
-import CallRecorder, { isNativeAvailable } from '../native/CallRecorder';
+import CallRecorder from '../native/CallRecorder';
 
 const CHIPS = ['All', 'Phone', 'WhatsApp', 'Today'];
 
 export default function HomeScreen() {
   const [masterEnabled, setMasterEnabled] = useState(true);
-  const [phoneEnabled, setPhoneEnabled] = useState(true);
-  const [whatsappEnabled, setWhatsappEnabled] = useState(false);
   const [liveCall, setLiveCall] = useState(null); // { contactName, channel } | null
   const [recordings, setRecordings] = useState([]);
   const [search, setSearch] = useState('');
   const [activeChip, setActiveChip] = useState('All');
   const [storageInfo, setStorageInfo] = useState({ usedBytes: 0, recordingCount: 0, dir: '' });
 
+  const [permStatus, setPermStatus] = useState({
+    mic: false,
+    phoneState: false,
+    contacts: false,
+    notificationAccess: false,
+    overlay: false,
+  });
+
+  const refreshPermissionStatus = useCallback(async () => {
+    const mic = await PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.RECORD_AUDIO);
+    const phoneState = await PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.READ_PHONE_STATE);
+    const contacts = await PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.READ_CONTACTS);
+    const notificationAccess = CallRecorder.isWhatsAppListenerEnabled();
+    const overlay = CallRecorder.isOverlayPermissionGranted();
+    setPermStatus({ mic, phoneState, contacts, notificationAccess, overlay });
+  }, []);
+
+  const requestCorePermissions = useCallback(async () => {
+    if (Platform.OS !== 'android') return;
+    const toRequest = [
+      PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
+      PermissionsAndroid.PERMISSIONS.READ_PHONE_STATE,
+      PermissionsAndroid.PERMISSIONS.READ_CONTACTS,
+      PermissionsAndroid.PERMISSIONS.READ_CALL_LOG,
+    ];
+    if (Platform.Version >= 33) {
+      toRequest.push(PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS);
+    }
+    try {
+      await PermissionsAndroid.requestMultiple(toRequest);
+    } catch (e) {
+      // User denied one or more — reflected in the permissions checklist below,
+      // not treated as a fatal error.
+    }
+    refreshPermissionStatus();
+  }, [refreshPermissionStatus]);
+
   const refresh = useCallback(async () => {
-    const [list, storage, master, phone, whatsapp] = await Promise.all([
+    const [list, storage, master] = await Promise.all([
       CallRecorder.listRecordings(),
       CallRecorder.getStorageInfo(),
       CallRecorder.getMasterEnabled(),
-      CallRecorder.getChannelEnabled('phone'),
-      CallRecorder.getChannelEnabled('whatsapp'),
     ]);
     setRecordings(list);
     setStorageInfo(storage);
     setMasterEnabled(master);
-    setPhoneEnabled(phone);
-    setWhatsappEnabled(whatsapp);
-  }, []);
+    refreshPermissionStatus();
+  }, [refreshPermissionStatus]);
 
   useEffect(() => {
+    requestCorePermissions();
     refresh();
     // The native module emits this event when a call recording starts/stops,
     // so the "Recording…" banner and the list update live without polling.
@@ -47,30 +80,12 @@ export default function HomeScreen() {
       }
     });
     return () => sub?.remove?.();
-  }, [refresh]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const toggleMaster = async (value) => {
     setMasterEnabled(value);
     await CallRecorder.setMasterEnabled(value);
-  };
-
-  const toggleChannel = async (channel, value) => {
-    if (channel === 'whatsapp' && value) {
-      const granted = await CallRecorder.isWhatsAppListenerEnabled();
-      if (!granted) {
-        Alert.alert(
-          'Notification access needed',
-          'WhatsApp call detection watches WhatsApp\'s own call notification, which requires Notification Access — a special permission Android makes you grant manually in Settings (there\'s no in-app prompt for this one).',
-          [
-            { text: 'Not now', style: 'cancel' },
-            { text: 'Open Settings', onPress: () => CallRecorder.openNotificationAccessSettings() },
-          ]
-        );
-      }
-    }
-    if (channel === 'phone') setPhoneEnabled(value);
-    if (channel === 'whatsapp') setWhatsappEnabled(value);
-    await CallRecorder.setChannelEnabled(channel, value);
   };
 
   const stopLiveRecording = async () => {
@@ -80,10 +95,6 @@ export default function HomeScreen() {
   };
 
   const playRecording = async (item) => {
-    if (!item.filePath) {
-      Alert.alert('Preview only', 'This is mock data — no real audio file exists yet.');
-      return;
-    }
     try {
       const { sound } = await Audio.Sound.createAsync({ uri: item.filePath });
       await sound.playAsync();
@@ -93,8 +104,8 @@ export default function HomeScreen() {
   };
 
   const shareRecording = async (item) => {
-    if (!item.filePath || !(await Sharing.isAvailableAsync())) {
-      Alert.alert('Preview only', 'This is mock data — nothing to share yet.');
+    if (!(await Sharing.isAvailableAsync())) {
+      Alert.alert('Sharing unavailable', 'This device has no share target available.');
       return;
     }
     await Sharing.shareAsync(item.filePath);
@@ -110,6 +121,26 @@ export default function HomeScreen() {
         },
       },
     ]);
+  };
+
+  const grantNotificationAccess = () => {
+    const opened = CallRecorder.openNotificationAccessSettings();
+    if (!opened) {
+      Alert.alert(
+        'Could not open Settings',
+        'Open it manually: Settings -> Apps -> Special app access -> Notification access -> CallVault -> Allow.'
+      );
+    }
+  };
+
+  const grantOverlayAccess = () => {
+    const opened = CallRecorder.openOverlayPermissionSettings();
+    if (!opened) {
+      Alert.alert(
+        'Could not open Settings',
+        'Open it manually: Settings -> Apps -> Special app access -> Display over other apps -> CallVault -> Allow.'
+      );
+    }
   };
 
   const filtered = useMemo(() => {
@@ -128,40 +159,45 @@ export default function HomeScreen() {
   }, [recordings, activeChip, search]);
 
   const usedMB = (storageInfo.usedBytes / (1024 * 1024)).toFixed(0);
+  const missingPerms = !permStatus.mic || !permStatus.phoneState || !permStatus.contacts
+    || !permStatus.notificationAccess || !permStatus.overlay;
 
   return (
     <View style={styles.container}>
       <Text style={styles.title}>CallVault</Text>
-      {!isNativeAvailable && (
-        <Text style={styles.devWarning}>
-          Dev mode: native module not linked — showing mock data. Build via GitHub Actions or `expo run:android` to test real recording.
-        </Text>
-      )}
 
       <View style={styles.masterCard}>
         <Text style={styles.label}>MASTER RECORDING</Text>
         <Switch value={masterEnabled} onValueChange={toggleMaster} />
-        <Text style={styles.statusPill}>{masterEnabled ? '● ACTIVE — listening for calls' : '○ OFF'}</Text>
+        <Text style={styles.statusPill}>
+          {masterEnabled ? '● ACTIVE — records phone + WhatsApp calls' : '○ OFF'}
+        </Text>
       </View>
-
-      <Row
-        title="Phone calls"
-        subtitle="Mic-based capture"
-        value={phoneEnabled}
-        onValueChange={(v) => toggleChannel('phone', v)}
-      />
-      <Row
-        title="WhatsApp calls"
-        subtitle="Notification-based detection — needs Notification Access"
-        value={whatsappEnabled}
-        onValueChange={(v) => toggleChannel('whatsapp', v)}
-      />
 
       <View style={styles.warnBanner}>
         <Text style={styles.warnText}>
           ⚠ Switch to Speakerphone during calls for usable audio — Android does not allow apps to tap call audio directly.
         </Text>
       </View>
+
+      {missingPerms && (
+        <View style={styles.permCard}>
+          <Text style={styles.permHeader}>SETUP NEEDED</Text>
+          <PermRow label="Microphone" granted={permStatus.mic} onGrant={requestCorePermissions} />
+          <PermRow label="Phone state" granted={permStatus.phoneState} onGrant={requestCorePermissions} />
+          <PermRow label="Contacts" granted={permStatus.contacts} onGrant={requestCorePermissions} />
+          <PermRow
+            label="Notification access (for WhatsApp calls)"
+            granted={permStatus.notificationAccess}
+            onGrant={grantNotificationAccess}
+          />
+          <PermRow
+            label="Display over other apps"
+            granted={permStatus.overlay}
+            onGrant={grantOverlayAccess}
+          />
+        </View>
+      )}
 
       {liveCall && (
         <View style={styles.liveCard}>
@@ -203,7 +239,13 @@ export default function HomeScreen() {
             onDelete={() => deleteRecording(item)}
           />
         )}
-        ListEmptyComponent={<Text style={styles.empty}>No recordings match your filters.</Text>}
+        ListEmptyComponent={
+          <Text style={styles.empty}>
+            {recordings.length === 0
+              ? 'No recordings yet — they will show up here after your first call.'
+              : 'No recordings match your filters.'}
+          </Text>
+        }
       />
 
       <Text style={styles.storageInfo}>
@@ -213,14 +255,15 @@ export default function HomeScreen() {
   );
 }
 
-function Row({ title, subtitle, value, onValueChange }) {
+function PermRow({ label, granted, onGrant }) {
   return (
-    <View style={styles.row}>
-      <View style={{ flex: 1 }}>
-        <Text style={styles.rowTitle}>{title}</Text>
-        <Text style={styles.rowSubtitle}>{subtitle}</Text>
-      </View>
-      <Switch value={value} onValueChange={onValueChange} />
+    <View style={styles.permRow}>
+      <Text style={styles.permLabel}>{granted ? '✅' : '⚠️'} {label}</Text>
+      {!granted && (
+        <TouchableOpacity style={styles.btnSmall} onPress={onGrant}>
+          <Text style={styles.btnText}>Grant</Text>
+        </TouchableOpacity>
+      )}
     </View>
   );
 }
@@ -255,15 +298,15 @@ function RecordingItem({ item, onPlay, onShare, onDelete }) {
 const styles = StyleSheet.create({
   container: { flex: 1, padding: 16, backgroundColor: '#fff' },
   title: { fontSize: 20, fontWeight: 'bold', marginBottom: 4 },
-  devWarning: { fontSize: 11, color: '#a15c00', backgroundColor: '#fff3e0', padding: 6, marginBottom: 8 },
   masterCard: { borderWidth: 1, borderColor: '#ccc', borderRadius: 8, padding: 12, alignItems: 'center', marginBottom: 10 },
   label: { fontSize: 11, color: '#888', marginBottom: 6, letterSpacing: 0.5 },
   statusPill: { fontSize: 11, marginTop: 6, color: '#333' },
-  row: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: '#eee', borderRadius: 8, padding: 10, marginBottom: 8 },
-  rowTitle: { fontSize: 14, fontWeight: '600' },
-  rowSubtitle: { fontSize: 11, color: '#888', marginTop: 2 },
   warnBanner: { backgroundColor: '#f5f5f5', borderRadius: 6, padding: 8, marginBottom: 8 },
   warnText: { fontSize: 11, color: '#555' },
+  permCard: { borderWidth: 1, borderColor: '#e0c060', backgroundColor: '#fffbea', borderRadius: 8, padding: 10, marginBottom: 8 },
+  permHeader: { fontSize: 10, fontWeight: 'bold', color: '#8a6d00', marginBottom: 6, letterSpacing: 0.5 },
+  permRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 4 },
+  permLabel: { fontSize: 12, color: '#333', flex: 1, paddingRight: 8 },
   liveCard: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#fdecea', borderRadius: 8, padding: 10, marginBottom: 8 },
   liveText: { fontSize: 13, fontWeight: '600', color: '#c0392b' },
   sectionHeader: { fontSize: 12, fontWeight: 'bold', color: '#333', marginTop: 6, marginBottom: 6, letterSpacing: 0.5 },
@@ -274,7 +317,7 @@ const styles = StyleSheet.create({
   chipText: { fontSize: 11, color: '#333' },
   chipTextActive: { color: '#fff' },
   list: { flex: 1 },
-  empty: { textAlign: 'center', color: '#999', marginTop: 20, fontSize: 12 },
+  empty: { textAlign: 'center', color: '#999', marginTop: 20, fontSize: 12, paddingHorizontal: 20 },
   recItem: { flexDirection: 'row', gap: 10, borderWidth: 1, borderColor: '#eee', borderRadius: 8, padding: 8, marginBottom: 6 },
   avatar: { width: 30, height: 30, borderRadius: 15, backgroundColor: '#f0f0f0', alignItems: 'center', justifyContent: 'center' },
   recName: { fontWeight: '600', fontSize: 13 },
