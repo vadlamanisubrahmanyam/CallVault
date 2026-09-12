@@ -67,8 +67,15 @@ export default function HomeScreen() {
   }, [refreshPermissionStatus]);
 
   useEffect(() => {
-    requestCorePermissions();
-    refresh();
+    // The master switch defaults to on every time the app is opened,
+    // regardless of what was left over from a previous session — this is a
+    // deliberate simplification so recording is never accidentally left off
+    // without the user noticing. Turning it off during a session is still
+    // respected until the app is next launched.
+    CallRecorder.setMasterEnabled(true).then(() => {
+      requestCorePermissions();
+      refresh();
+    });
     // The native module emits this event when a call recording starts/stops,
     // so the "Recording…" banner and the list update live without polling.
     const sub = CallRecorder.addListener?.('onRecordingStateChanged', (evt) => {

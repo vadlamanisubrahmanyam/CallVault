@@ -14,7 +14,7 @@ SHIELD_PATH = (
     "L724,255 "
     "C684,205 604,170 512,170 Z"
 )
-#DUMMY COMMENT TO TRIGGER BUILD
+
 # Material-style phone handset icon, originally in a 24x24 box, scaled and
 # translated so it sits centered inside the shield above.
 PHONE_PATH_RAW = (

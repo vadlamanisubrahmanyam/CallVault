@@ -1,4 +1,4 @@
-# CallVault v0.4.1
+# CallVault v0.4.3
 
 A single-screen Android app to record phone calls and WhatsApp calls, with
 contact-based filenames, stored in local app storage.
@@ -28,6 +28,28 @@ contact-based filenames, stored in local app storage.
   needs a content-observer-on-call-log fallback) — not wired up yet.
 - **No retention/auto-delete policy** — recordings accumulate until
   manually deleted.
+
+## v0.4.2 → v0.4.3 changelog
+
+- **Changed:** the master recording switch now forces itself ON every
+  time the app is opened, regardless of what was left over from a
+  previous session. Previously it remembered the last state you set,
+  which meant an old "off" from earlier testing could persist silently
+  and you'd have to notice and re-enable it. Turning it off during a
+  session is still respected until the app is next launched.
+
+## v0.4.1 → v0.4.2 changelog (diagnostics)
+
+- **Added:** detailed logcat logging (tag `CallVault`) throughout the
+  entire recording pipeline — broadcast received, master-switch check,
+  microphone permission check, foreground service start, MediaRecorder
+  prepare/start, and file finalization. Previously several of these steps
+  failed silently by design (to avoid crashing the app), which is safe
+  but made real on-device failures hard to diagnose remotely. Now every
+  step logs its outcome.
+- **No behavior changes** — this is purely diagnostic. If recording still
+  doesn't work after this, `adb logcat -s CallVault:V` during a real test
+  call will show exactly which step failed and why, instead of guessing.
 
 ## v0.4 → v0.4.1 changelog (build fix)
 
